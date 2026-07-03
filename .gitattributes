@@ -1,0 +1,15 @@
+# Normaliza saltos de línea. LF por defecto (importante para los scripts bash del CI).
+* text=auto eol=lf
+
+# Scripts de Windows en CRLF.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binarios.
+*.png binary
+*.ico binary
+*.apk binary
+*.msi binary
+*.jar binary
+*.keystore binary

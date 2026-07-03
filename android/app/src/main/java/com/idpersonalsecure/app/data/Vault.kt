@@ -1,0 +1,203 @@
+package com.idpersonalsecure.app.data
+
+import android.content.Context
+import com.idpersonalsecure.app.crypto.VaultCrypto
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.util.UUID
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+
+fun nowIso(): String = OffsetDateTime.now(ZoneOffset.UTC).withNano(0).toString()
+
+class IntegrityException(msg: String) : Exception(msg)
+
+/** Tipo de documento del catálogo (Colombia + multipaís). */
+data class DocType(val code: String, val label: String, val country: String)
+
+object DocumentCatalog {
+    val types: List<DocType> = listOf(
+        DocType("REGISTRO_CIVIL", "Registro Civil", "CO"),
+        DocType("TI", "Tarjeta de Identidad", "CO"),
+        DocType("CC", "Cédula de Ciudadanía", "CO"),
+        DocType("CE", "Cédula de Extranjería", "CO"),
+        DocType("PASAPORTE", "Pasaporte", "CO"),
+        DocType("PPT", "Permiso por Protección Temporal", "CO"),
+        DocType("SC", "Salvoconducto", "CO"),
+        DocType("NIT", "NIT", "CO"),
+        DocType("DNI", "DNI", "XX"),
+        DocType("CURP", "CURP", "MX"),
+        DocType("RUT", "RUT", "CL"),
+        DocType("PASSPORT", "Passport", "XX"),
+        DocType("CERT", "Certificado", "XX"),
+    )
+    fun label(code: String): String = types.firstOrNull { it.code == code }?.label ?: code
+}
+
+data class Document(
+    val id: String = UUID.randomUUID().toString(),
+    var name: String = "",
+    var type: String = "CC",
+    var country: String = "CO",
+    var number: String = "",
+    var issueDate: String = "",
+    var expiryDate: String = "",
+    var hasExpiry: Boolean = false,
+    var urlSource: String = "",
+    var fileName: String = "",
+    var notes: String = "",
+    val createdAt: String = nowIso(),
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id); put("name", name); put("type", type); put("country", country)
+        put("number", number); put("issueDate", issueDate); put("expiryDate", expiryDate)
+        put("hasExpiry", hasExpiry); put("urlSource", urlSource); put("fileName", fileName)
+        put("notes", notes); put("createdAt", createdAt)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = Document(
+            id = o.optString("id", UUID.randomUUID().toString()),
+            name = o.optString("name"),
+            type = o.optString("type", "CC"),
+            country = o.optString("country", "CO"),
+            number = o.optString("number"),
+            issueDate = o.optString("issueDate"),
+            expiryDate = o.optString("expiryDate"),
+            hasExpiry = o.optBoolean("hasExpiry", false),
+            urlSource = o.optString("urlSource"),
+            fileName = o.optString("fileName"),
+            notes = o.optString("notes"),
+            createdAt = o.optString("createdAt", nowIso()),
+        )
+    }
+}
+
+/**
+ * Bóveda local cifrada + export/import de `.securevault`.
+ * El almacén local usa el MISMO esquema que el archivo exportado (docs/CRYPTO.md).
+ */
+class VaultRepository(context: Context) {
+    private val filesDir: File = context.filesDir
+    private val dbFile get() = File(filesDir, "vault.db.enc")
+    private val saltFile get() = File(filesDir, "vault.salt")
+
+    var salt: ByteArray = ByteArray(0); private set
+    private var keys: VaultCrypto.Keys? = null
+    val documents = mutableListOf<Document>()
+
+    fun vaultExists(): Boolean = saltFile.exists()
+    val isUnlocked: Boolean get() = keys != null
+
+    /** Desbloquea (o crea) la bóveda local con el PIN. false si el PIN es incorrecto. */
+    fun unlock(pin: String): Boolean {
+        salt = if (saltFile.exists()) saltFile.readBytes()
+        else VaultCrypto.newSalt().also { saltFile.writeBytes(it) }
+        val k = VaultCrypto.deriveKeys(pin, salt)
+        documents.clear()
+        if (dbFile.exists()) {
+            try {
+                loadJson(String(VaultCrypto.decrypt(dbFile.readBytes(), k.enc, "database"), Charsets.UTF_8))
+            } catch (e: Exception) {
+                return false
+            }
+        }
+        keys = k
+        return true
+    }
+
+    fun lock() { keys = null; documents.clear() }
+
+    private fun loadJson(json: String) {
+        documents.clear()
+        val arr = JSONObject(json).optJSONArray("documents") ?: JSONArray()
+        for (i in 0 until arr.length()) documents.add(Document.fromJson(arr.getJSONObject(i)))
+    }
+
+    private fun buildDbJson(): String {
+        val arr = JSONArray()
+        documents.forEach { arr.put(it.toJson()) }
+        return JSONObject().put("schema", 1).put("documents", arr).toString()
+    }
+
+    fun save() {
+        val k = keys ?: return
+        dbFile.writeBytes(VaultCrypto.encrypt(buildDbJson().toByteArray(Charsets.UTF_8), k.enc, "database"))
+    }
+
+    fun upsert(doc: Document) {
+        val idx = documents.indexOfFirst { it.id == doc.id }
+        if (idx >= 0) documents[idx] = doc else documents.add(doc)
+        save()
+    }
+
+    fun delete(id: String) { documents.removeAll { it.id == id }; save() }
+
+    /** Exporta la bóveda actual a un `.securevault`. */
+    fun export(out: OutputStream) {
+        val k = keys ?: throw IllegalStateException("Bóveda bloqueada")
+        val dbBlob = VaultCrypto.encrypt(buildDbJson().toByteArray(Charsets.UTF_8), k.enc, "database")
+        val dbB64 = VaultCrypto.b64(dbBlob)
+        val dbMac = VaultCrypto.b64(VaultCrypto.hmac(k.mac, dbB64.toByteArray(Charsets.UTF_8)))
+        val manifest = JSONObject().apply {
+            put("format", "securevault"); put("formatVersion", 1); put("app", "IDPersonalSecure")
+            put("createdAt", nowIso()); put("kdf", "PBKDF2-HMAC-SHA256"); put("iterations", 210000)
+            put("cipher", "AES-256-GCM"); put("salt", VaultCrypto.b64(salt)); put("dbMac", dbMac)
+            put("files", JSONArray())
+        }
+        ZipOutputStream(out).use { zip ->
+            zip.putNextEntry(ZipEntry("manifest.json"))
+            zip.write(manifest.toString(2).toByteArray(Charsets.UTF_8)); zip.closeEntry()
+            zip.putNextEntry(ZipEntry("database.enc"))
+            zip.write(dbB64.toByteArray(Charsets.UTF_8)); zip.closeEntry()
+        }
+    }
+
+    /** Importa un `.securevault`: valida integridad (HMAC) y reemplaza la bóveda local. */
+    fun import(input: InputStream, pin: String) {
+        var manifestText: String? = null
+        var dbB64: String? = null
+        ZipInputStream(input).use { zip ->
+            var e: ZipEntry? = zip.nextEntry
+            while (e != null) {
+                val bytes = readAll(zip)
+                when (e.name) {
+                    "manifest.json" -> manifestText = String(bytes, Charsets.UTF_8)
+                    "database.enc" -> dbB64 = String(bytes, Charsets.UTF_8)
+                }
+                zip.closeEntry(); e = zip.nextEntry
+            }
+        }
+        val manifest = JSONObject(manifestText ?: throw IntegrityException("manifest.json ausente"))
+        val impSalt = VaultCrypto.unb64(manifest.getString("salt"))
+        val db = dbB64 ?: throw IntegrityException("database.enc ausente")
+        val k = VaultCrypto.deriveKeys(pin, impSalt)
+        val expectMac = manifest.getString("dbMac")
+        val actualMac = VaultCrypto.b64(VaultCrypto.hmac(k.mac, db.toByteArray(Charsets.UTF_8)))
+        if (!constantTimeEquals(expectMac, actualMac)) throw IntegrityException("Integridad inválida o PIN incorrecto")
+        val json = String(VaultCrypto.decrypt(VaultCrypto.unb64(db), k.enc, "database"), Charsets.UTF_8)
+        salt = impSalt; saltFile.writeBytes(impSalt); keys = k
+        loadJson(json); save()
+    }
+
+    private fun constantTimeEquals(a: String, b: String): Boolean {
+        val x = a.toByteArray(); val y = b.toByteArray()
+        if (x.size != y.size) return false
+        var r = 0
+        for (i in x.indices) r = r or (x[i].toInt() xor y[i].toInt())
+        return r == 0
+    }
+
+    private fun readAll(input: InputStream): ByteArray {
+        val bos = ByteArrayOutputStream(); val buf = ByteArray(8192); var n: Int
+        while (input.read(buf).also { n = it } >= 0) bos.write(buf, 0, n)
+        return bos.toByteArray()
+    }
+}

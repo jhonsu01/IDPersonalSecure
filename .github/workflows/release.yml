@@ -1,0 +1,174 @@
+name: Release
+
+# Compila el APK (Android) y el MSI (Windows), publica la release y
+# mantiene SOLO la última release (borra las anteriores + sus tags).
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión a publicar (sin la 'v', p. ej. 0.1.0)"
+        required: true
+        default: "0.1.0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      code: ${{ steps.v.outputs.code }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - id: v
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VER="${{ github.event.inputs.version }}"
+          else
+            VER="${GITHUB_REF_NAME#v}"
+          fi
+          IFS=. read -r MA MI PA <<< "$VER"
+          CODE=$(( ${MA:-0} * 10000 + ${MI:-0} * 100 + ${PA:-0} ))
+          echo "version=$VER"      >> "$GITHUB_OUTPUT"
+          echo "code=$CODE"        >> "$GITHUB_OUTPUT"
+          echo "tag=v$VER"         >> "$GITHUB_OUTPUT"
+          echo "Versión=$VER  code=$CODE  tag=v$VER"
+
+  android:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Build APK (debug-signed, instalable)
+        working-directory: android
+        env:
+          VERSION_NAME: ${{ needs.setup.outputs.version }}
+          VERSION_CODE: ${{ needs.setup.outputs.code }}
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+             "out/IDPersonalSecure-${{ needs.setup.outputs.version }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: out/*.apk
+          if-no-files-found: error
+
+  windows:
+    needs: setup
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish (self-contained single-file)
+        working-directory: windows/IDPersonalSecure
+        run: >
+          dotnet publish -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:Version=${{ needs.setup.outputs.version }}
+          -o "${{ github.workspace }}/winpub"
+
+      - name: Install WiX
+        run: dotnet tool install --global wix --version 5.0.2
+
+      - name: Build MSI
+        working-directory: windows
+        run: >
+          wix build installer/Package.wxs
+          -d ProductVersion=${{ needs.setup.outputs.version }}
+          -d "PublishDir=${{ github.workspace }}/winpub"
+          -arch x64
+          -o "${{ github.workspace }}/out/IDPersonalSecure-${{ needs.setup.outputs.version }}.msi"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi
+          path: out/*.msi
+          if-no-files-found: error
+
+  release:
+    needs: [setup, android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: List artifacts
+        run: find dist -type f
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ needs.setup.outputs.tag }}"
+          VER="${{ needs.setup.outputs.version }}"
+          NOTES=$(cat <<EOF
+          ## IDPersonalSecure $VER
+
+          Bóveda digital personal multiplataforma (offline-first, cifrado local).
+
+          ### Descargas
+          - **Android:** \`IDPersonalSecure-$VER.apk\` — habilita "orígenes desconocidos" e instala.
+            > El APK está firmado en modo *debug* (instalable). La firma de release llegará en una versión futura.
+          - **Windows:** \`IDPersonalSecure-$VER.msi\` — doble clic para instalar (requiere permisos de administrador).
+
+          Cifrado: AES-256-GCM + PBKDF2-HMAC-SHA256 (210k) + HMAC-SHA256. Ver \`docs/CRYPTO.md\`.
+          EOF
+          )
+          # Crea (o recrea) la release del tag actual con ambos instaladores.
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title "IDPersonalSecure $VER" \
+            --notes "$NOTES" \
+            dist/apk/*.apk dist/msi/*.msi
+
+      - name: Keep only the latest release (delete previous)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ needs.setup.outputs.tag }}"
+          for t in $(gh release list --limit 100 --json tagName --jq '.[].tagName'); do
+            if [ "$t" != "$TAG" ]; then
+              echo "Borrando release antigua: $t"
+              gh release delete "$t" --yes --cleanup-tag || true
+            fi
+          done

@@ -1,0 +1,92 @@
+<Window x:Class="IDPersonalSecure.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="IDPersonalSecure" Height="640" Width="820"
+        MinHeight="480" MinWidth="640"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BgBrush}"
+        TextElement.Foreground="{StaticResource TextBrush}">
+
+    <Grid>
+        <!-- ══════════ Login ══════════ -->
+        <Grid x:Name="LoginPanel">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="320">
+                <TextBlock Text="🛡️ IDPersonalSecure" FontSize="26" FontWeight="Bold"
+                           HorizontalAlignment="Center"/>
+                <TextBlock x:Name="LoginSubtitle" Text="Ingresa tu PIN"
+                           Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center"
+                           Margin="0,6,0,20"/>
+                <PasswordBox x:Name="PinBox" KeyDown="PinBox_KeyDown"/>
+                <TextBlock x:Name="LoginError" Foreground="{StaticResource DangerBrush}"
+                           Margin="0,8,0,0" TextWrapping="Wrap"/>
+                <Button x:Name="UnlockButton" Content="Desbloquear" Click="Unlock_Click"
+                        Margin="0,20,0,0" Height="38"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- ══════════ Bóveda ══════════ -->
+        <DockPanel x:Name="VaultPanel" Visibility="Collapsed" LastChildFill="True">
+            <!-- Toolbar -->
+            <Border DockPanel.Dock="Top" Background="{StaticResource SurfaceBrush}" Padding="16,10">
+                <DockPanel>
+                    <TextBlock Text="Mi bóveda" FontSize="18" FontWeight="Bold"
+                               VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                        <Button Content="＋ Agregar" Click="Add_Click"/>
+                        <Button Content="Exportar" Style="{StaticResource GhostButton}" Click="Export_Click"/>
+                        <Button Content="Importar" Style="{StaticResource GhostButton}" Click="Import_Click"/>
+                        <Button Content="Bloquear" Style="{StaticResource GhostButton}" Click="Lock_Click"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- Filtros -->
+            <Grid DockPanel.Dock="Top" Margin="16,12,16,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="SearchBox" Grid.Column="0" TextChanged="Search_Changed"/>
+                <ComboBox x:Name="FilterBox" Grid.Column="1" Width="170" Margin="8,0,0,0"
+                          SelectionChanged="Filter_Changed"/>
+            </Grid>
+
+            <!-- Lista -->
+            <ListView x:Name="DocList" Margin="16,4,16,16" Background="Transparent"
+                      BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="0,4"/>
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{StaticResource SurfaceBrush}" CornerRadius="8" Padding="14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="15"/>
+                                    <TextBlock Text="{Binding Subtitle}" Foreground="{StaticResource MutedBrush}"
+                                               Margin="0,2,0,0"/>
+                                    <TextBlock Text="{Binding ExpiryDisplay}" Foreground="{StaticResource AccentBrush}"
+                                               Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Content="Editar" Style="{StaticResource GhostButton}" Click="Edit_Click"/>
+                                    <Button Content="Borrar" Click="Delete_Click"
+                                            Background="{StaticResource DangerBrush}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </DockPanel>
+    </Grid>
+</Window>

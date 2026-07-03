@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <!--
+    Empaqueta el ejecutable self-contained single-file en un MSI perMachine.
+    Variables (pasadas por `wix build -d`):
+      ProductVersion : versión semántica (p. ej. 0.1.0)
+      PublishDir     : carpeta absoluta que contiene IDPersonalSecure.exe
+  -->
+  <Package Name="IDPersonalSecure"
+           Manufacturer="jhonsu01"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="7B2C9E14-3A6D-4F2B-9C1E-2D5A8F0B4C77"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <MajorUpgrade DowngradeErrorMessage="Ya hay una versión más reciente de IDPersonalSecure instalada." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="AppIcon" SourceFile="$(var.PublishDir)\IDPersonalSecure.exe" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/jhonsu01/IDPersonalSecure" />
+
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="IDPersonalSecure" />
+    </StandardDirectory>
+
+    <Component Id="MainExe" Directory="INSTALLFOLDER" Guid="A1F4C2E8-9B7D-4E3A-8C6F-1D2B3A4C5E60">
+      <File Id="AppExe" Source="$(var.PublishDir)\IDPersonalSecure.exe" KeyPath="yes">
+        <Shortcut Id="StartMenuShortcut"
+                  Directory="ProgramMenuFolder"
+                  Name="IDPersonalSecure"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="AppIcon"
+                  Advertise="yes" />
+      </File>
+    </Component>
+
+    <Feature Id="Main" Title="IDPersonalSecure" Level="1">
+      <ComponentRef Id="MainExe" />
+    </Feature>
+
+  </Package>
+</Wix>

@@ -1,0 +1,51 @@
+# ── Archivos de orquestacion / privados (NO van al repo publico) ──
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+Guia.md
+.claude/
+.codegraph/
+.slurp/
+memory/
+directives/
+execution/
+.tmp/
+.mcp.json
+
+# ── Secretos ──
+*.env
+.env
+credentials.json
+token.json
+*.keystore
+*.jks
+keystore.properties
+
+# ── Android / Gradle ──
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/local.properties
+android/.idea/
+android/*.iml
+android/.kotlin/
+
+# ── Windows / .NET ──
+windows/**/bin/
+windows/**/obj/
+windows/**/.vs/
+windows/artifacts/
+windows/installer/*.msi
+windows/installer/obj/
+
+# ── Salidas de build genericas ──
+*.apk
+*.aab
+*.msi
+dist/
+out/
+
+# ── Sistema operativo ──
+Thumbs.db
+.DS_Store
