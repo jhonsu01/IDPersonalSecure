@@ -51,6 +51,7 @@ public sealed class Document
     public string CreatedAt { get; set; } = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
 
     [JsonIgnore] public string TypeLabel => DocumentCatalog.Label(Type);
+    [JsonIgnore] public string AttachmentBadge => string.IsNullOrEmpty(FileName) ? "" : "📎";
     [JsonIgnore] public string Subtitle => $"{TypeLabel} · {Country}" + (string.IsNullOrEmpty(Number) ? "" : $" · N.º {Number}");
     [JsonIgnore] public bool IsExpired => HasExpiry && DateTime.TryParse(ExpiryDate, out var d) && d.Date < DateTime.Today;
     [JsonIgnore] public string ExpiryDisplay =>
@@ -95,6 +96,8 @@ public sealed class VaultRepository
     private readonly string _dir;
     private string DbPath => Path.Combine(_dir, "vault.db.enc");
     private string SaltPath => Path.Combine(_dir, "vault.salt");
+    private string AttachDir => Path.Combine(_dir, "attachments");
+    private string AttachPath(string id) => Path.Combine(AttachDir, $"{id}.enc");
 
     public byte[] Salt { get; private set; } = Array.Empty<byte>();
     private VaultCrypto.Keys? _keys;
@@ -104,6 +107,28 @@ public sealed class VaultRepository
     {
         _dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "IDPersonalSecure");
         Directory.CreateDirectory(_dir);
+        Directory.CreateDirectory(AttachDir);
+    }
+
+    // ── Adjuntos cifrados (files/<id>.enc, AAD = id) ─────────────────────
+    public bool HasAttachment(string id) => File.Exists(AttachPath(id));
+
+    public void SaveAttachment(string id, byte[] data)
+    {
+        if (_keys is null) throw new InvalidOperationException("Bóveda bloqueada");
+        Directory.CreateDirectory(AttachDir);
+        File.WriteAllBytes(AttachPath(id), VaultCrypto.Encrypt(data, _keys.Enc, id));
+    }
+
+    public byte[]? ReadAttachment(string id)
+    {
+        if (_keys is null || !HasAttachment(id)) return null;
+        return VaultCrypto.Decrypt(File.ReadAllBytes(AttachPath(id)), _keys.Enc, id);
+    }
+
+    public void DeleteAttachment(string id)
+    {
+        if (File.Exists(AttachPath(id))) File.Delete(AttachPath(id));
     }
 
     public bool VaultExists() => File.Exists(SaltPath);
@@ -166,6 +191,7 @@ public sealed class VaultRepository
     {
         var existing = Documents.FirstOrDefault(d => d.Id == id);
         if (existing != null) Documents.Remove(existing);
+        DeleteAttachment(id);
         Save();
     }
 
@@ -181,16 +207,26 @@ public sealed class VaultRepository
             Salt = VaultCrypto.B64(Salt),
             DbMac = dbMac,
         };
+        var fileIds = Documents.Where(d => HasAttachment(d.Id)).Select(d => d.Id).ToList();
+        manifest.Files = fileIds;
+
         using var zip = new ZipArchive(outStream, ZipArchiveMode.Create, leaveOpen: true);
         using (var w = new StreamWriter(zip.CreateEntry("manifest.json").Open(), Utf8NoBom))
             w.Write(JsonSerializer.Serialize(manifest, new JsonSerializerOptions(Json) { WriteIndented = true }));
         using (var w = new StreamWriter(zip.CreateEntry("database.enc").Open(), Utf8NoBom))
             w.Write(dbB64);
+        foreach (var id in fileIds)
+        {
+            string blobB64 = VaultCrypto.B64(File.ReadAllBytes(AttachPath(id)));
+            using var w = new StreamWriter(zip.CreateEntry($"files/{id}.enc").Open(), Utf8NoBom);
+            w.Write(blobB64);
+        }
     }
 
     public void Import(Stream input, string pin)
     {
         string? manifestText = null, dbB64 = null;
+        var fileBlobs = new Dictionary<string, string>();
         using (var zip = new ZipArchive(input, ZipArchiveMode.Read, leaveOpen: true))
         {
             foreach (var e in zip.Entries)
@@ -199,6 +235,8 @@ public sealed class VaultRepository
                 string content = r.ReadToEnd();
                 if (e.FullName == "manifest.json") manifestText = content;
                 else if (e.FullName == "database.enc") dbB64 = content;
+                else if (e.FullName.StartsWith("files/") && e.FullName.EndsWith(".enc"))
+                    fileBlobs[Path.GetFileNameWithoutExtension(e.Name)] = content;
             }
         }
         if (manifestText is null) throw new IntegrityException("manifest.json ausente");
@@ -219,5 +257,12 @@ public sealed class VaultRepository
         _keys = k;
         LoadJson(json);
         Save();
+
+        // Restaura adjuntos: limpia los previos y escribe los importados (misma clave).
+        if (Directory.Exists(AttachDir))
+            foreach (var f in Directory.GetFiles(AttachDir)) File.Delete(f);
+        Directory.CreateDirectory(AttachDir);
+        foreach (var (id, b64) in fileBlobs)
+            File.WriteAllBytes(AttachPath(id), VaultCrypto.Unb64(b64));
     }
 }

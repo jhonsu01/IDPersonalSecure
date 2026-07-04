@@ -71,13 +71,17 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="15"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="15"/>
+                                        <TextBlock Text="{Binding AttachmentBadge}" Margin="6,0,0,0" FontSize="14"/>
+                                    </StackPanel>
                                     <TextBlock Text="{Binding Subtitle}" Foreground="{StaticResource MutedBrush}"
                                                Margin="0,2,0,0"/>
                                     <TextBlock Text="{Binding ExpiryDisplay}" Foreground="{StaticResource AccentBrush}"
                                                Margin="0,2,0,0"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Content="Compartir" Style="{StaticResource GhostButton}" Click="Share_Click"/>
                                     <Button Content="Editar" Style="{StaticResource GhostButton}" Click="Edit_Click"/>
                                     <Button Content="Borrar" Click="Delete_Click"
                                             Background="{StaticResource DangerBrush}"/>

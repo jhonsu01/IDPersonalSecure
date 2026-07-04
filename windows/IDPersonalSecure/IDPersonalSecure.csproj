@@ -18,4 +18,8 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="PdfSharp" Version="6.1.1" />
+  </ItemGroup>
+
 </Project>

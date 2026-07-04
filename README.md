@@ -63,9 +63,10 @@ un tag `vX.Y.Z`. Para compilar localmente:
 ## 🧭 Roadmap
 
 - [x] v0.1.0 — Bóveda, PIN, cifrado, export/import `.securevault`, iconos, CI auto-release.
+- [x] v0.2.0 — Adjuntar PDF/imagen cifrado, selector de fecha (calendario), compartir con marca de agua (trámite + ID único + fecha/hora); Android usa el share nativo. Fixes de UI en Windows.
 - [ ] OCR (ML Kit / Tesseract), clasificación de documentos.
 - [ ] Biometría (Android) y Windows Hello.
-- [ ] Marca de agua, notificaciones de vencimiento, documentos dinámicos por URL.
+- [ ] Notificaciones de vencimiento, documentos dinámicos por URL.
 - [ ] Firma de release del APK y tests de interoperabilidad cruzada en CI.
 - [ ] QR verificable, sincronización opcional en la nube.
 

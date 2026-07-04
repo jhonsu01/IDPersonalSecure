@@ -88,6 +88,8 @@ class VaultRepository(context: Context) {
     private val filesDir: File = context.filesDir
     private val dbFile get() = File(filesDir, "vault.db.enc")
     private val saltFile get() = File(filesDir, "vault.salt")
+    private val attachDir get() = File(filesDir, "attachments").apply { mkdirs() }
+    private fun attachFile(id: String) = File(attachDir, "$id.enc")
 
     var salt: ByteArray = ByteArray(0); private set
     private var keys: VaultCrypto.Keys? = null
@@ -138,7 +140,23 @@ class VaultRepository(context: Context) {
         save()
     }
 
-    fun delete(id: String) { documents.removeAll { it.id == id }; save() }
+    fun delete(id: String) { documents.removeAll { it.id == id }; deleteAttachment(id); save() }
+
+    // ── Adjuntos cifrados (files/<id>.enc, AAD = id) ─────────────────────
+    fun hasAttachment(id: String): Boolean = attachFile(id).exists()
+
+    fun saveAttachment(id: String, data: ByteArray) {
+        val k = keys ?: throw IllegalStateException("Bóveda bloqueada")
+        attachFile(id).writeBytes(VaultCrypto.encrypt(data, k.enc, id))
+    }
+
+    fun readAttachment(id: String): ByteArray? {
+        val k = keys ?: return null
+        val f = attachFile(id)
+        return if (f.exists()) VaultCrypto.decrypt(f.readBytes(), k.enc, id) else null
+    }
+
+    fun deleteAttachment(id: String) { attachFile(id).delete() }
 
     /** Exporta la bóveda actual a un `.securevault`. */
     fun export(out: OutputStream) {
@@ -146,17 +164,23 @@ class VaultRepository(context: Context) {
         val dbBlob = VaultCrypto.encrypt(buildDbJson().toByteArray(Charsets.UTF_8), k.enc, "database")
         val dbB64 = VaultCrypto.b64(dbBlob)
         val dbMac = VaultCrypto.b64(VaultCrypto.hmac(k.mac, dbB64.toByteArray(Charsets.UTF_8)))
+        val fileIds = documents.filter { hasAttachment(it.id) }.map { it.id }
         val manifest = JSONObject().apply {
             put("format", "securevault"); put("formatVersion", 1); put("app", "IDPersonalSecure")
             put("createdAt", nowIso()); put("kdf", "PBKDF2-HMAC-SHA256"); put("iterations", 210000)
             put("cipher", "AES-256-GCM"); put("salt", VaultCrypto.b64(salt)); put("dbMac", dbMac)
-            put("files", JSONArray())
+            put("files", JSONArray(fileIds))
         }
         ZipOutputStream(out).use { zip ->
             zip.putNextEntry(ZipEntry("manifest.json"))
             zip.write(manifest.toString(2).toByteArray(Charsets.UTF_8)); zip.closeEntry()
             zip.putNextEntry(ZipEntry("database.enc"))
             zip.write(dbB64.toByteArray(Charsets.UTF_8)); zip.closeEntry()
+            for (id in fileIds) {
+                val blobB64 = VaultCrypto.b64(attachFile(id).readBytes())
+                zip.putNextEntry(ZipEntry("files/$id.enc"))
+                zip.write(blobB64.toByteArray(Charsets.UTF_8)); zip.closeEntry()
+            }
         }
     }
 
@@ -164,13 +188,17 @@ class VaultRepository(context: Context) {
     fun import(input: InputStream, pin: String) {
         var manifestText: String? = null
         var dbB64: String? = null
+        val fileBlobs = HashMap<String, String>()
         ZipInputStream(input).use { zip ->
             var e: ZipEntry? = zip.nextEntry
             while (e != null) {
                 val bytes = readAll(zip)
-                when (e.name) {
-                    "manifest.json" -> manifestText = String(bytes, Charsets.UTF_8)
-                    "database.enc" -> dbB64 = String(bytes, Charsets.UTF_8)
+                val name = e.name
+                when {
+                    name == "manifest.json" -> manifestText = String(bytes, Charsets.UTF_8)
+                    name == "database.enc" -> dbB64 = String(bytes, Charsets.UTF_8)
+                    name.startsWith("files/") && name.endsWith(".enc") ->
+                        fileBlobs[name.substringAfterLast('/').removeSuffix(".enc")] = String(bytes, Charsets.UTF_8)
                 }
                 zip.closeEntry(); e = zip.nextEntry
             }
@@ -185,6 +213,10 @@ class VaultRepository(context: Context) {
         val json = String(VaultCrypto.decrypt(VaultCrypto.unb64(db), k.enc, "database"), Charsets.UTF_8)
         salt = impSalt; saltFile.writeBytes(impSalt); keys = k
         loadJson(json); save()
+
+        // Restaura adjuntos: limpia los previos y escribe los importados (misma clave).
+        attachDir.listFiles()?.forEach { it.delete() }
+        for ((id, b64) in fileBlobs) attachFile(id).writeBytes(VaultCrypto.unb64(b64))
     }
 
     private fun constantTimeEquals(a: String, b: String): Boolean {
