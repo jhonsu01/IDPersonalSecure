@@ -53,13 +53,14 @@ data class Document(
     var urlSource: String = "",
     var fileName: String = "",
     var notes: String = "",
+    var reminderAt: String = "",
     val createdAt: String = nowIso(),
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("type", type); put("country", country)
         put("number", number); put("issueDate", issueDate); put("expiryDate", expiryDate)
         put("hasExpiry", hasExpiry); put("urlSource", urlSource); put("fileName", fileName)
-        put("notes", notes); put("createdAt", createdAt)
+        put("notes", notes); put("reminderAt", reminderAt); put("createdAt", createdAt)
     }
 
     companion object {
@@ -75,6 +76,7 @@ data class Document(
             urlSource = o.optString("urlSource"),
             fileName = o.optString("fileName"),
             notes = o.optString("notes"),
+            reminderAt = o.optString("reminderAt"),
             createdAt = o.optString("createdAt", nowIso()),
         )
     }

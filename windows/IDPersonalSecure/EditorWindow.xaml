@@ -1,7 +1,8 @@
 <Window x:Class="IDPersonalSecure.EditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Documento" Height="640" Width="460"
+        xmlns:local="clr-namespace:IDPersonalSecure"
+        Title="Documento" Height="700" Width="470"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         Background="{StaticResource BgBrush}"
         TextElement.Foreground="{StaticResource TextBrush}">
@@ -13,7 +14,13 @@
             <TextBox x:Name="NameBox" Margin="0,2,0,10"/>
 
             <TextBlock Text="Tipo"/>
-            <ComboBox x:Name="TypeBox" Margin="0,2,0,10" DisplayMemberPath="Label" SelectedValuePath="Code"/>
+            <ComboBox x:Name="TypeBox" Margin="0,2,0,10" SelectedValuePath="Code" SelectionChanged="Type_Changed">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock x:Name="CustomTypeLabel" Text="Nombre del tipo personalizado" Visibility="Collapsed"/>
+            <TextBox x:Name="CustomTypeBox" Margin="0,2,0,10" Visibility="Collapsed"/>
 
             <TextBlock Text="País (ISO 3166-1 alpha-2)"/>
             <TextBox x:Name="CountryBox" MaxLength="2" Margin="0,2,0,10"/>
@@ -30,37 +37,43 @@
                 <TextBox x:Name="IssueBox" Grid.Column="0"/>
                 <Button Grid.Column="1" Content="📅" Style="{StaticResource GhostButton}" Margin="6,0,0,0" Click="IssueCalendar_Click"/>
                 <Popup x:Name="IssuePopup" PlacementTarget="{Binding ElementName=IssueBox}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
-                    <Border Background="White" TextElement.Foreground="#111827" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
-                        <Border.Resources>
-                            <Style TargetType="Button"/>
-                            <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#111827"/></Style>
-                        </Border.Resources>
-                        <Calendar x:Name="IssueCal" Background="White" Foreground="#111827" SelectedDatesChanged="IssueCal_Changed"/>
-                    </Border>
+                    <local:CalendarControl x:Name="IssueCal"/>
                 </Popup>
             </Grid>
 
             <CheckBox x:Name="HasExpiryBox" Content="¿Tiene vencimiento?" Foreground="{StaticResource TextBrush}"
                       Margin="0,4,0,8" Checked="HasExpiry_Changed" Unchecked="HasExpiry_Changed"/>
 
-            <TextBlock x:Name="ExpiryLabel" Text="Fecha de vencimiento"/>
-            <Grid x:Name="ExpiryRow" Margin="0,2,0,10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBox x:Name="ExpiryBox" Grid.Column="0"/>
-                <Button Grid.Column="1" Content="📅" Style="{StaticResource GhostButton}" Margin="6,0,0,0" Click="ExpiryCalendar_Click"/>
-                <Popup x:Name="ExpiryPopup" PlacementTarget="{Binding ElementName=ExpiryBox}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
-                    <Border Background="White" TextElement.Foreground="#111827" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
-                        <Border.Resources>
-                            <Style TargetType="Button"/>
-                            <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#111827"/></Style>
-                        </Border.Resources>
-                        <Calendar x:Name="ExpiryCal" Background="White" Foreground="#111827" SelectedDatesChanged="ExpiryCal_Changed"/>
-                    </Border>
-                </Popup>
-            </Grid>
+            <StackPanel x:Name="ExpiryPanel">
+                <TextBlock Text="Fecha de vencimiento"/>
+                <Grid Margin="0,2,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="ExpiryBox" Grid.Column="0"/>
+                    <Button Grid.Column="1" Content="📅" Style="{StaticResource GhostButton}" Margin="6,0,0,0" Click="ExpiryCalendar_Click"/>
+                    <Popup x:Name="ExpiryPopup" PlacementTarget="{Binding ElementName=ExpiryBox}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                        <local:CalendarControl x:Name="ExpiryCal"/>
+                    </Popup>
+                </Grid>
+
+                <CheckBox x:Name="ReminderCheck" Content="Recordármelo (notificación)" Foreground="{StaticResource TextBrush}"
+                          Margin="0,0,0,8" Checked="Reminder_Changed" Unchecked="Reminder_Changed"/>
+                <Grid x:Name="ReminderRow" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="72"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="ReminderDateBox" Grid.Column="0"/>
+                    <Button Grid.Column="1" Content="📅" Style="{StaticResource GhostButton}" Margin="6,0,6,0" Click="ReminderCalendar_Click"/>
+                    <TextBox x:Name="ReminderTimeBox" Grid.Column="2" Text="09:00" ToolTip="Hora HH:mm"/>
+                    <Popup x:Name="ReminderPopup" PlacementTarget="{Binding ElementName=ReminderDateBox}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                        <local:CalendarControl x:Name="ReminderCal"/>
+                    </Popup>
+                </Grid>
+            </StackPanel>
 
             <TextBlock Text="Adjunto (PDF o imagen)"/>
             <Grid Margin="0,2,0,10">

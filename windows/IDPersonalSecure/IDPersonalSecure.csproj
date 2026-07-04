@@ -4,6 +4,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
@@ -17,6 +18,12 @@
     <Description>Tarjetero / bóveda digital personal segura</Description>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
+
+  <!-- Evita ambigüedades WPF/WinForms: WinForms se usa con nombre completo. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="PdfSharp" Version="6.1.1" />

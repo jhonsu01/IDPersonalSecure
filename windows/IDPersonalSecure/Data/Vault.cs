@@ -48,10 +48,12 @@ public sealed class Document
     public string UrlSource { get; set; } = "";
     public string FileName { get; set; } = "";
     public string Notes { get; set; } = "";
+    public string ReminderAt { get; set; } = "";
     public string CreatedAt { get; set; } = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
 
     [JsonIgnore] public string TypeLabel => DocumentCatalog.Label(Type);
     [JsonIgnore] public string AttachmentBadge => string.IsNullOrEmpty(FileName) ? "" : "📎";
+    [JsonIgnore] public bool HasUrl => !string.IsNullOrWhiteSpace(UrlSource);
     [JsonIgnore] public string Subtitle => $"{TypeLabel} · {Country}" + (string.IsNullOrEmpty(Number) ? "" : $" · N.º {Number}");
     [JsonIgnore] public bool IsExpired => HasExpiry && DateTime.TryParse(ExpiryDate, out var d) && d.Date < DateTime.Today;
     [JsonIgnore] public string ExpiryDisplay =>

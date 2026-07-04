@@ -1,15 +1,18 @@
 package com.idpersonalsecure.app
 
+import android.Manifest
 import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,12 +40,14 @@ import com.idpersonalsecure.app.data.DocumentCatalog
 import com.idpersonalsecure.app.data.IntegrityException
 import com.idpersonalsecure.app.data.ShareRecord
 import com.idpersonalsecure.app.data.VaultRepository
+import com.idpersonalsecure.app.notify.ReminderScheduler
 import com.idpersonalsecure.app.share.ShareInfo
 import com.idpersonalsecure.app.share.Watermark
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
@@ -56,6 +61,12 @@ sealed interface AttachAction {
 }
 
 private fun parseDate(s: String): LocalDate? = try { if (s.isBlank()) null else LocalDate.parse(s) } catch (e: Exception) { null }
+
+private fun parseReminderMillis(s: String): Long? = try {
+    if (s.isBlank()) null
+    else LocalDateTime.parse(s, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+} catch (e: Exception) { null }
 
 class VaultViewModel(app: Application) : AndroidViewModel(app) {
     val repo = VaultRepository(app)
@@ -76,7 +87,7 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addShareRecord(rec: ShareRecord) { repo.addShareRecord(rec); revision++ }
     fun updateShareRecipient(id: String, recipient: String) { repo.updateShareRecipient(id, recipient); revision++ }
-    fun delete(id: String) { repo.delete(id); revision++ }
+    fun delete(id: String) { repo.delete(id); ReminderScheduler.cancel(getApplication<Application>(), id); revision++ }
 
     fun save(doc: Document, action: AttachAction) {
         repo.upsert(doc)
@@ -85,7 +96,19 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
             AttachAction.Remove -> repo.deleteAttachment(doc.id)
             AttachAction.Keep -> {}
         }
+        applyReminder(doc)
         revision++
+    }
+
+    private fun applyReminder(doc: Document) {
+        val ctx = getApplication<Application>()
+        val millis = parseReminderMillis(doc.reminderAt)
+        if (millis != null && millis > System.currentTimeMillis()) {
+            val text = if (doc.expiryDate.isNotBlank()) "${doc.name} vence el ${doc.expiryDate}" else doc.name
+            ReminderScheduler.schedule(ctx, doc.id, "Recordatorio de documento", text, millis)
+        } else {
+            ReminderScheduler.cancel(ctx, doc.id)
+        }
     }
 
     fun visibleDocs(): List<Document> {
@@ -168,6 +191,11 @@ fun VaultScreen(vm: VaultViewModel) {
     var sharing by remember { mutableStateOf<Document?>(null) }
     var showMenu by remember { mutableStateOf(false) }
 
+    val notifPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33) notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
@@ -239,6 +267,7 @@ fun VaultScreen(vm: VaultViewModel) {
                             doc,
                             onEdit = { editing = doc },
                             onDelete = { vm.delete(doc.id) },
+                            onOpenUrl = { openUrl(context, doc.urlSource) },
                             onShare = {
                                 if (!vm.repo.hasAttachment(doc.id) || doc.fileName.isBlank())
                                     toast(context, "Este documento no tiene adjunto (PDF/imagen) para compartir")
@@ -272,7 +301,7 @@ fun VaultScreen(vm: VaultViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DocumentCard(doc: Document, onEdit: () -> Unit, onDelete: () -> Unit, onShare: () -> Unit) {
+fun DocumentCard(doc: Document, onEdit: () -> Unit, onDelete: () -> Unit, onOpenUrl: () -> Unit, onShare: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     ElevatedCard(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -290,6 +319,14 @@ fun DocumentCard(doc: Document, onEdit: () -> Unit, onDelete: () -> Unit, onShar
                         (if (vencido) "Vencido: " else "Vence: ") + doc.expiryDate,
                         style = MaterialTheme.typography.bodySmall,
                         color = if (vencido) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (doc.urlSource.isNotBlank()) {
+                    Text(
+                        "🔗 ${doc.urlSource}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 2.dp).clickable { onOpenUrl() }
                     )
                 }
             }
@@ -334,6 +371,33 @@ fun DateField(label: String, value: String, onChange: (String) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+fun TimeField(label: String, value: String, onChange: (String) -> Unit) {
+    var show by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value = value, onValueChange = {}, readOnly = true,
+        label = { Text(label) }, modifier = Modifier.fillMaxWidth(),
+        trailingIcon = { TextButton(onClick = { show = true }) { Text("🕐") } }
+    )
+    if (show) {
+        val parts = value.split(":")
+        val h = parts.getOrNull(0)?.toIntOrNull() ?: 9
+        val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val state = rememberTimePickerState(initialHour = h, initialMinute = m, is24Hour = true)
+        AlertDialog(
+            onDismissRequest = { show = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    onChange(String.format("%02d:%02d", state.hour, state.minute)); show = false
+                }) { Text("Aceptar") }
+            },
+            dismissButton = { TextButton(onClick = { show = false }) { Text("Cancelar") } },
+            text = { TimePicker(state = state) }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun DocumentEditor(source: Document, onDismiss: () -> Unit, onSave: (Document, AttachAction) -> Unit) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(source.name) }
@@ -346,6 +410,10 @@ fun DocumentEditor(source: Document, onDismiss: () -> Unit, onSave: (Document, A
     var urlSource by remember { mutableStateOf(source.urlSource) }
     var notes by remember { mutableStateOf(source.notes) }
     var typeMenu by remember { mutableStateOf(false) }
+    var customType by remember { mutableStateOf(if (DocumentCatalog.types.none { it.code == source.type }) source.type else "") }
+    var reminderOn by remember { mutableStateOf(source.reminderAt.isNotBlank()) }
+    var reminderDate by remember { mutableStateOf(source.reminderAt.split(" ").getOrElse(0) { "" }) }
+    var reminderTime by remember { mutableStateOf(source.reminderAt.split(" ").getOrElse(1) { "09:00" }) }
 
     var attachName by remember { mutableStateOf(source.fileName) }
     var pendingBytes by remember { mutableStateOf<ByteArray?>(null) }
@@ -374,11 +442,16 @@ fun DocumentEditor(source: Document, onDismiss: () -> Unit, onSave: (Document, A
                     removeFlag -> ""
                     else -> source.fileName
                 }
+                val finalType = if (DocumentCatalog.types.any { it.code == type } && type != "__CUSTOM__") type
+                else customType.trim().ifBlank { "Otro" }
+                val reminderAt = if (hasExpiry && reminderOn && reminderDate.isNotBlank())
+                    "$reminderDate ${reminderTime.ifBlank { "09:00" }}" else ""
                 onSave(
                     source.copy(
-                        name = name, type = type, country = country, number = number,
+                        name = name, type = finalType, country = country, number = number,
                         issueDate = issueDate, expiryDate = if (hasExpiry) expiryDate else "",
-                        hasExpiry = hasExpiry, urlSource = urlSource, notes = notes, fileName = fileName
+                        hasExpiry = hasExpiry, urlSource = urlSource, notes = notes, fileName = fileName,
+                        reminderAt = reminderAt
                     ),
                     action
                 )
@@ -390,9 +463,11 @@ fun DocumentEditor(source: Document, onDismiss: () -> Unit, onSave: (Document, A
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(name, { name = it }, label = { Text("Nombre") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
+                val knownType = DocumentCatalog.types.any { it.code == type } && type != "__CUSTOM__"
                 Box {
                     OutlinedTextField(
-                        value = DocumentCatalog.label(type), onValueChange = {}, readOnly = true,
+                        value = if (knownType) DocumentCatalog.label(type) else "Otro (personalizado)",
+                        onValueChange = {}, readOnly = true,
                         label = { Text("Tipo") }, modifier = Modifier.fillMaxWidth(),
                         trailingIcon = { TextButton(onClick = { typeMenu = true }) { Text("▼") } }
                     )
@@ -402,7 +477,15 @@ fun DocumentEditor(source: Document, onDismiss: () -> Unit, onSave: (Document, A
                                 type = t.code; if (t.country != "XX") country = t.country; typeMenu = false
                             })
                         }
+                        DropdownMenuItem(text = { Text("Otro (personalizado)…") }, onClick = {
+                            type = "__CUSTOM__"; typeMenu = false
+                        })
                     }
+                }
+                if (!knownType) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(customType, { customType = it }, label = { Text("Nombre del tipo personalizado") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(country, { country = it.uppercase().take(2) }, label = { Text("País (ISO)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -417,6 +500,16 @@ fun DocumentEditor(source: Document, onDismiss: () -> Unit, onSave: (Document, A
                 }
                 if (hasExpiry) {
                     DateField("Fecha de vencimiento", expiryDate) { expiryDate = it }
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(checked = reminderOn, onCheckedChange = { reminderOn = it })
+                        Spacer(Modifier.width(8.dp)); Text("Recordármelo (notificación)")
+                    }
+                    if (reminderOn) {
+                        DateField("Fecha del recordatorio", reminderDate) { reminderDate = it }
+                        Spacer(Modifier.height(8.dp))
+                        TimeField("Hora del recordatorio", reminderTime) { reminderTime = it }
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
                 Text("Adjunto (PDF o imagen)", style = MaterialTheme.typography.labelMedium)
@@ -586,6 +679,14 @@ private fun mimeFor(ext: String): String = when (ext.removePrefix(".").lowercase
     "webp" -> "image/webp"
     "bmp" -> "image/bmp"
     else -> "*/*"
+}
+
+private fun openUrl(context: Context, url: String) {
+    var u = url.trim()
+    if (u.isBlank()) return
+    if (!u.startsWith("http://", true) && !u.startsWith("https://", true)) u = "https://$u"
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) }
+        .onFailure { toast(context, "No se pudo abrir el enlace") }
 }
 
 private fun currentDateTime(): String =

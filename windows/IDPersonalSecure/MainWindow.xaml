@@ -80,6 +80,21 @@
                                                Margin="0,2,0,0"/>
                                     <TextBlock Text="{Binding ExpiryDisplay}" Foreground="{StaticResource AccentBrush}"
                                                Margin="0,2,0,0"/>
+                                    <TextBlock Margin="0,2,0,0" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasUrl}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                        <Hyperlink Click="Url_Click" Foreground="{StaticResource AccentBrush}">
+                                            <Run Text="🔗 "/><Run Text="{Binding UrlSource}"/>
+                                        </Hyperlink>
+                                    </TextBlock>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button Content="Compartir" Style="{StaticResource GhostButton}" Click="Share_Click"/>

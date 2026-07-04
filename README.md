@@ -65,9 +65,10 @@ un tag `vX.Y.Z`. Para compilar localmente:
 - [x] v0.1.0 — Bóveda, PIN, cifrado, export/import `.securevault`, iconos, CI auto-release.
 - [x] v0.2.0 — Adjuntar PDF/imagen cifrado, selector de fecha (calendario), compartir con marca de agua (trámite + ID único + fecha/hora); Android usa el share nativo. Fixes de UI en Windows.
 - [x] v0.3.0 — Marca de agua **opcional** al compartir, **historial de compartidos** (con destinatario editable), fix del calendario en Windows y del share en Android.
+- [x] v0.4.0 — Calendario propio legible (Windows), **tipo de documento personalizado**, **URL clicable** (abre el navegador), y **recordatorios con hora + notificación** (Android nativa; Windows con la app abierta / al abrirla).
 - [ ] OCR (ML Kit / Tesseract), clasificación de documentos.
 - [ ] Biometría (Android) y Windows Hello.
-- [ ] Notificaciones de vencimiento, documentos dinámicos por URL.
+- [ ] Recordatorios en segundo plano en Windows (tarea programada) y re-programación tras reinicio (Android).
 - [ ] Firma de release del APK y tests de interoperabilidad cruzada en CI.
 - [ ] QR verificable, sincronización opcional en la nube.
 

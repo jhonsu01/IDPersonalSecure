@@ -5,7 +5,9 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Threading;
 using IDPersonalSecure.Data;
 using IDPersonalSecure.Sharing;
 using Microsoft.Win32;
@@ -16,6 +18,7 @@ public partial class MainWindow : Window
 {
     private readonly VaultRepository _repo = new();
     private ICollectionView? _view;
+    private DispatcherTimer? _reminderTimer;
 
     public MainWindow()
     {
@@ -44,10 +47,19 @@ public partial class MainWindow : Window
         DocList.ItemsSource = _view;
         LoginPanel.Visibility = Visibility.Collapsed;
         VaultPanel.Visibility = Visibility.Visible;
+
+        ReminderService.CheckDue(_repo);
+        _reminderTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
+        _reminderTimer.Tick -= ReminderTick;
+        _reminderTimer.Tick += ReminderTick;
+        _reminderTimer.Start();
     }
+
+    private void ReminderTick(object? sender, EventArgs e) => ReminderService.CheckDue(_repo);
 
     private void Lock_Click(object sender, RoutedEventArgs e)
     {
+        _reminderTimer?.Stop();
         _repo.Lock();
         DocList.ItemsSource = null;
         PinBox.Clear();
@@ -55,6 +67,19 @@ public partial class MainWindow : Window
         VaultPanel.Visibility = Visibility.Collapsed;
         LoginPanel.Visibility = Visibility.Visible;
         PinBox.Focus();
+    }
+
+    private void Url_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Hyperlink)?.DataContext is Document d && d.HasUrl) OpenUrl(d.UrlSource);
+    }
+
+    private static void OpenUrl(string url)
+    {
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            url = "https://" + url;
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
     }
 
     private bool FilterPredicate(object obj)
