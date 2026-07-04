@@ -35,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.idpersonalsecure.app.data.Document
 import com.idpersonalsecure.app.data.DocumentCatalog
 import com.idpersonalsecure.app.data.IntegrityException
+import com.idpersonalsecure.app.data.ShareRecord
 import com.idpersonalsecure.app.data.VaultRepository
 import com.idpersonalsecure.app.share.ShareInfo
 import com.idpersonalsecure.app.share.Watermark
@@ -62,6 +63,7 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
     var error by mutableStateOf<String?>(null)
     var query by mutableStateOf("")
     var filter by mutableStateOf(Filter.ALL)
+    var showHistory by mutableStateOf(false)
     var revision by mutableStateOf(0)
 
     fun unlock(pin: String) {
@@ -70,7 +72,10 @@ class VaultViewModel(app: Application) : AndroidViewModel(app) {
         else error = "PIN incorrecto o bóveda corrupta"
     }
 
-    fun lock() { repo.lock(); unlocked = false; query = ""; filter = Filter.ALL }
+    fun lock() { repo.lock(); unlocked = false; query = ""; filter = Filter.ALL; showHistory = false }
+
+    fun addShareRecord(rec: ShareRecord) { repo.addShareRecord(rec); revision++ }
+    fun updateShareRecipient(id: String, recipient: String) { repo.updateShareRecipient(id, recipient); revision++ }
     fun delete(id: String) { repo.delete(id); revision++ }
 
     fun save(doc: Document, action: AttachAction) {
@@ -115,7 +120,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppRoot(vm: VaultViewModel = viewModel()) {
-    if (!vm.unlocked) UnlockScreen(vm) else VaultScreen(vm)
+    when {
+        !vm.unlocked -> UnlockScreen(vm)
+        vm.showHistory -> HistoryScreen(vm) { vm.showHistory = false }
+        else -> VaultScreen(vm)
+    }
 }
 
 @Composable
@@ -188,6 +197,9 @@ fun VaultScreen(vm: VaultViewModel) {
                 actions = {
                     IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, "Menú") }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(text = { Text("Historial de compartidos") }, onClick = {
+                            showMenu = false; vm.showHistory = true
+                        })
                         DropdownMenuItem(text = { Text("Exportar .securevault") }, onClick = {
                             showMenu = false; exportLauncher.launch("vault-${System.currentTimeMillis()}.securevault")
                         })
@@ -247,8 +259,8 @@ fun VaultScreen(vm: VaultViewModel) {
         )
     }
     sharing?.let { doc ->
-        TramiteDialog(onDismiss = { sharing = null }, onConfirm = { tramite ->
-            performShare(context, vm.repo, doc, tramite); sharing = null
+        ShareDialog(onDismiss = { sharing = null }, onConfirm = { watermark, tramite, recipient ->
+            performShare(context, vm, doc, watermark, tramite, recipient); sharing = null
         })
     }
     if (askImportPin) {
@@ -424,21 +436,98 @@ fun DocumentEditor(source: Document, onDismiss: () -> Unit, onSave: (Document, A
 }
 
 @Composable
-fun TramiteDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var t by remember { mutableStateOf("") }
+fun ShareDialog(onDismiss: () -> Unit, onConfirm: (Boolean, String, String) -> Unit) {
+    var watermark by remember { mutableStateOf(false) }
+    var tramite by remember { mutableStateOf("") }
+    var recipient by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = { onConfirm(t.trim()) }, enabled = t.isNotBlank()) { Text("Compartir") } },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(watermark, tramite.trim(), recipient.trim()) },
+                enabled = !watermark || tramite.isNotBlank()
+            ) { Text("Compartir") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
-        title = { Text("Compartir con marca de agua") },
+        title = { Text("Compartir documento") },
         text = {
             Column {
-                Text("Motivo / trámite (aparecerá en la marca de agua junto a un ID único):",
-                    style = MaterialTheme.typography.bodySmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(checked = watermark, onCheckedChange = { watermark = it })
+                    Spacer(Modifier.width(8.dp)); Text("Aplicar marca de agua")
+                }
+                if (watermark) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(tramite, { tramite = it }, label = { Text("Motivo / trámite") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(t, { t = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(recipient, { recipient = it }, label = { Text("Destinatario (opcional)") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth())
             }
         }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HistoryScreen(vm: VaultViewModel, onBack: () -> Unit) {
+    var editing by remember { mutableStateOf<ShareRecord?>(null) }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Historial") },
+                navigationIcon = { TextButton(onClick = onBack) { Text("‹ Volver") } }
+            )
+        }
+    ) { padding ->
+        vm.revision // dependencia de recomposición
+        val log = vm.repo.shareLog
+        if (log.isEmpty()) {
+            Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Aún no has compartido documentos.", style = MaterialTheme.typography.bodyMedium)
+            }
+        } else {
+            LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                items(log, key = { it.id }) { r -> HistoryCard(r, onEdit = { editing = r }) }
+            }
+        }
+    }
+    editing?.let { r ->
+        RecipientDialog(r.recipient, onDismiss = { editing = null }, onConfirm = {
+            vm.updateShareRecipient(r.id, it); editing = null
+        })
+    }
+}
+
+@Composable
+fun HistoryCard(r: ShareRecord, onEdit: () -> Unit) {
+    ElevatedCard(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("${r.docName} · ${r.dateTime}", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    if (r.watermarked) "ID ${r.id}" + (if (r.tramite.isNotBlank()) " · ${r.tramite}" else "")
+                    else "sin marca de agua",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text("Destinatario: ${r.recipient.ifBlank { "—" }}",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+            TextButton(onClick = onEdit) { Text("Destinatario") }
+        }
+    }
+}
+
+@Composable
+fun RecipientDialog(initial: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var v by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = { onConfirm(v.trim()) }) { Text("Guardar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+        title = { Text("¿A quién le compartiste?") },
+        text = { OutlinedTextField(v, { v = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
     )
 }
 
@@ -461,25 +550,42 @@ fun PinDialog(title: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit)
     )
 }
 
-private fun performShare(context: Context, repo: VaultRepository, doc: Document, tramite: String) {
+private fun performShare(
+    context: Context, vm: VaultViewModel, doc: Document,
+    applyWatermark: Boolean, tramite: String, recipient: String
+) {
     runCatching {
-        val bytes = repo.readAttachment(doc.id) ?: throw IllegalStateException("Sin adjunto")
-        val info = ShareInfo(tramite, Watermark.newShareId(), currentDateTime())
-        val (out, ext) = Watermark.apply(context, bytes, doc.fileName, info)
+        val bytes = vm.repo.readAttachment(doc.id) ?: throw IllegalStateException("Sin adjunto")
+        val shareId = Watermark.newShareId()
+        val now = currentDateTime()
+        val (out, ext) = if (applyWatermark)
+            Watermark.apply(context, bytes, doc.fileName, ShareInfo(tramite, shareId, now))
+        else
+            Pair(bytes, "." + doc.fileName.substringAfterLast('.', "bin").lowercase())
         val dir = File(context.cacheDir, "shared").apply { mkdirs() }
-        val file = File(dir, "${safeName(doc.name)}-${info.shareId}$ext")
+        val file = File(dir, "${safeName(doc.name)}-$shareId$ext")
         file.writeBytes(out)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        val mime = if (ext == ".pdf") "application/pdf" else "image/png"
         val send = Intent(Intent.ACTION_SEND).apply {
-            type = mime
+            type = mimeFor(ext)
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_TEXT, "Documento con marca de agua · ID ${info.shareId} · $tramite")
+            putExtra(Intent.EXTRA_TEXT, "Documento compartido · ID $shareId" + if (tramite.isNotBlank()) " · $tramite" else "")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(send, "Compartir documento"))
-        toast(context, "ID de seguimiento: ${info.shareId}")
+        vm.addShareRecord(ShareRecord(shareId, doc.id, doc.name, if (applyWatermark) tramite else "", now, recipient, applyWatermark))
+        toast(context, "ID $shareId · guardado en Historial")
     }.onFailure { toast(context, "No se pudo compartir: ${it.message}") }
+}
+
+private fun mimeFor(ext: String): String = when (ext.removePrefix(".").lowercase()) {
+    "pdf" -> "application/pdf"
+    "png" -> "image/png"
+    "jpg", "jpeg" -> "image/jpeg"
+    "gif" -> "image/gif"
+    "webp" -> "image/webp"
+    "bmp" -> "image/bmp"
+    else -> "*/*"
 }
 
 private fun currentDateTime(): String =

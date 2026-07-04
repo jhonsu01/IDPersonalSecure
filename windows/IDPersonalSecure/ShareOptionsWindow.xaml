@@ -1,0 +1,26 @@
+<Window x:Class="IDPersonalSecure.ShareOptionsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Compartir documento" Width="440" SizeToContent="Height" MinHeight="260"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="{StaticResource BgBrush}"
+        TextElement.Foreground="{StaticResource TextBrush}">
+    <StackPanel Margin="20">
+        <TextBlock Text="Se generará una copia para compartir." Margin="0,0,0,12"/>
+
+        <CheckBox x:Name="WatermarkCheck" Content="Aplicar marca de agua (trámite + ID único + fecha)"
+                  Foreground="{StaticResource TextBrush}" Margin="0,0,0,10"
+                  Checked="Watermark_Changed" Unchecked="Watermark_Changed"/>
+
+        <TextBlock x:Name="TramiteLabel" Text="Motivo / trámite (para la marca de agua)"/>
+        <TextBox x:Name="TramiteBox" Margin="0,2,0,10"/>
+
+        <TextBlock Text="Destinatario (opcional, para tu registro interno)"/>
+        <TextBox x:Name="RecipientBox" Margin="0,2,0,16"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancelar" Style="{StaticResource GhostButton}" Click="Cancel_Click"/>
+            <Button Content="Compartir" Click="Ok_Click"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

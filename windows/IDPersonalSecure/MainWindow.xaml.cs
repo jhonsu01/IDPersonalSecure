@@ -99,45 +99,68 @@ public partial class MainWindow : Window
             _repo.DeleteAttachment(editor.Result.Id);
     }
 
+    private void History_Click(object sender, RoutedEventArgs e) =>
+        new HistoryWindow(_repo) { Owner = this }.ShowDialog();
+
     private void Share_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not Document d) return;
         if (!_repo.HasAttachment(d.Id) || string.IsNullOrEmpty(d.FileName))
         {
-            MessageBox.Show("Este documento no tiene un adjunto (PDF/imagen) para compartir.\nEdítalo y adjunta un archivo primero.",
+            MessageBox.Show("Este documento no tiene un adjunto para compartir.\nEdítalo y adjunta un PDF o imagen primero.",
                 "Compartir", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (!WatermarkService.IsSupported(d.FileName))
+
+        var opts = new ShareOptionsWindow { Owner = this };
+        if (opts.ShowDialog() != true) return;
+        bool wm = opts.ApplyWatermark;
+        if (wm && !WatermarkService.IsSupported(d.FileName))
         {
-            MessageBox.Show("El adjunto no es una imagen ni un PDF compatible.", "Compartir",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("El adjunto no es una imagen ni un PDF, no se le puede aplicar marca de agua.\nCompártelo sin marca de agua.",
+                "Compartir", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-
-        var prompt = new PromptWindow(
-            "Motivo / trámite para el que compartes este documento.\nAparecerá en la marca de agua (cambia en cada envío):",
-            "") { Owner = this };
-        if (prompt.ShowDialog() != true) return;
 
         try
         {
             byte[] data = _repo.ReadAttachment(d.Id)!;
-            var info = new ShareInfo(prompt.Value, WatermarkService.NewShareId(), DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
-            var (outBytes, ext) = WatermarkService.Apply(data, d.FileName, info);
+            string shareId = WatermarkService.NewShareId();
+            string when = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+            byte[] outBytes;
+            string ext;
+            if (wm)
+            {
+                (outBytes, ext) = WatermarkService.Apply(data, d.FileName, new ShareInfo(opts.Tramite, shareId, when));
+            }
+            else
+            {
+                outBytes = data;
+                ext = Path.GetExtension(d.FileName);
+                if (string.IsNullOrEmpty(ext)) ext = ".bin";
+            }
 
             var save = new SaveFileDialog
             {
-                FileName = $"{SafeName(d.Name)}-{info.ShareId}{ext}",
-                Filter = ext == ".pdf" ? "PDF (*.pdf)|*.pdf" : "Imagen PNG (*.png)|*.png",
+                FileName = $"{SafeName(d.Name)}-{shareId}{ext}",
+                Filter = $"Archivo (*{ext})|*{ext}|Todos|*.*",
             };
             if (save.ShowDialog() != true) return;
             File.WriteAllBytes(save.FileName, outBytes);
             try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{save.FileName}\"") { UseShellExecute = true }); }
             catch { /* opcional */ }
 
+            _repo.AddShareRecord(new ShareRecord
+            {
+                Id = shareId, DocId = d.Id, DocName = d.Name,
+                Tramite = wm ? opts.Tramite : "", DateTime = when,
+                Recipient = opts.Recipient, Watermarked = wm,
+            });
+
             MessageBox.Show(
-                $"Copia con marca de agua generada.\n\nID de seguimiento: {info.ShareId}\nTrámite: {info.Tramite}\nFecha: {info.DateTime}\n\nGuarda este ID para saber a quién le compartiste esta copia.",
+                $"Copia generada{(wm ? " con marca de agua" : " (sin marca de agua)")}.\n\nID de seguimiento: {shareId}\nFecha: {when}" +
+                (string.IsNullOrWhiteSpace(opts.Recipient) ? "" : $"\nDestinatario: {opts.Recipient}") +
+                "\n\nQueda registrada en el Historial.",
                 "Compartir", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)

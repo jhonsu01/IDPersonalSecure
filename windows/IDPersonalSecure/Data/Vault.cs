@@ -60,10 +60,28 @@ public sealed class Document
     public Document Clone() => (Document)MemberwiseClone();
 }
 
+/// <summary>Registro de un documento compartido (historial interno).</summary>
+public sealed class ShareRecord
+{
+    public string Id { get; set; } = "";
+    public string DocId { get; set; } = "";
+    public string DocName { get; set; } = "";
+    public string Tramite { get; set; } = "";
+    public string DateTime { get; set; } = "";
+    public string Recipient { get; set; } = "";
+    public bool Watermarked { get; set; }
+
+    [JsonIgnore] public string Line1 => $"{DocName}  ·  {DateTime}";
+    [JsonIgnore] public string Line2 => (Watermarked ? $"ID {Id}" : "sin marca de agua") +
+        (string.IsNullOrWhiteSpace(Tramite) ? "" : $"  ·  {Tramite}");
+    [JsonIgnore] public string RecipientDisplay => string.IsNullOrWhiteSpace(Recipient) ? "Destinatario: —" : $"Destinatario: {Recipient}";
+}
+
 public sealed class VaultDb
 {
     public int Schema { get; set; } = 1;
     public List<Document> Documents { get; set; } = new();
+    public List<ShareRecord> ShareLog { get; set; } = new();
 }
 
 file sealed class Manifest
@@ -102,6 +120,7 @@ public sealed class VaultRepository
     public byte[] Salt { get; private set; } = Array.Empty<byte>();
     private VaultCrypto.Keys? _keys;
     public ObservableCollection<Document> Documents { get; } = new();
+    public ObservableCollection<ShareRecord> ShareLog { get; } = new();
 
     public VaultRepository()
     {
@@ -167,12 +186,23 @@ public sealed class VaultRepository
     private void LoadJson(string json)
     {
         Documents.Clear();
+        ShareLog.Clear();
         var db = JsonSerializer.Deserialize<VaultDb>(json, Json) ?? new VaultDb();
         foreach (var d in db.Documents) Documents.Add(d);
+        foreach (var s in db.ShareLog) ShareLog.Add(s);
     }
 
     private byte[] SerializeDb() =>
-        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new VaultDb { Documents = Documents.ToList() }, Json));
+        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(
+            new VaultDb { Documents = Documents.ToList(), ShareLog = ShareLog.ToList() }, Json));
+
+    public void AddShareRecord(ShareRecord rec) { ShareLog.Insert(0, rec); Save(); }
+
+    public void UpdateShareRecipient(string id, string recipient)
+    {
+        var r = ShareLog.FirstOrDefault(x => x.Id == id);
+        if (r != null) { r.Recipient = recipient; Save(); }
+    }
 
     public void Save()
     {

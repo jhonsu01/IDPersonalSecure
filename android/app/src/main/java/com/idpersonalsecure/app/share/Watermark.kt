@@ -51,7 +51,7 @@ object Watermark {
     }
 
     private fun applyPdf(context: Context, input: ByteArray, info: ShareInfo): ByteArray {
-        val tmp = File.createTempFile("in", ".pdf", context.cacheDir)
+        val tmp = File.createTempFile("idps_in_", ".pdf", context.cacheDir)
         tmp.writeBytes(input)
         val pfd = ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY)
         val renderer = PdfRenderer(pfd)

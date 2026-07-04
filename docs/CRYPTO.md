@@ -106,6 +106,10 @@ En la importación se verifica `dbMac` **antes** de descifrar; si no coincide �
 
 Un documento con adjunto tiene `fileName` no vacío y un `files/<id>.enc` asociado.
 
+La base de datos incluye además un arreglo opcional `shareLog` (historial interno de
+documentos compartidos), con objetos `{ id, docId, docName, tramite, dateTime, recipient, watermarked }`.
+Es aditivo: una versión que no lo entienda simplemente lo ignora.
+
 ## 6. Tipos de documento (catálogo inicial)
 
 Colombia: `REGISTRO_CIVIL, TI, CC, CE, PASAPORTE, PPT, SC, NIT`.

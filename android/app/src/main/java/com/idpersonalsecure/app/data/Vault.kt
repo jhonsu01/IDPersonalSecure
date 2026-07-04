@@ -80,6 +80,30 @@ data class Document(
     }
 }
 
+/** Registro de un documento compartido (historial interno). */
+data class ShareRecord(
+    val id: String,
+    val docId: String,
+    val docName: String,
+    val tramite: String,
+    val dateTime: String,
+    var recipient: String,
+    val watermarked: Boolean,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id); put("docId", docId); put("docName", docName); put("tramite", tramite)
+        put("dateTime", dateTime); put("recipient", recipient); put("watermarked", watermarked)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = ShareRecord(
+            id = o.optString("id"), docId = o.optString("docId"), docName = o.optString("docName"),
+            tramite = o.optString("tramite"), dateTime = o.optString("dateTime"),
+            recipient = o.optString("recipient"), watermarked = o.optBoolean("watermarked", false),
+        )
+    }
+}
+
 /**
  * Bóveda local cifrada + export/import de `.securevault`.
  * El almacén local usa el MISMO esquema que el archivo exportado (docs/CRYPTO.md).
@@ -94,6 +118,7 @@ class VaultRepository(context: Context) {
     var salt: ByteArray = ByteArray(0); private set
     private var keys: VaultCrypto.Keys? = null
     val documents = mutableListOf<Document>()
+    val shareLog = mutableListOf<ShareRecord>()
 
     fun vaultExists(): Boolean = saltFile.exists()
     val isUnlocked: Boolean get() = keys != null
@@ -119,14 +144,26 @@ class VaultRepository(context: Context) {
 
     private fun loadJson(json: String) {
         documents.clear()
-        val arr = JSONObject(json).optJSONArray("documents") ?: JSONArray()
+        shareLog.clear()
+        val root = JSONObject(json)
+        val arr = root.optJSONArray("documents") ?: JSONArray()
         for (i in 0 until arr.length()) documents.add(Document.fromJson(arr.getJSONObject(i)))
+        val log = root.optJSONArray("shareLog") ?: JSONArray()
+        for (i in 0 until log.length()) shareLog.add(ShareRecord.fromJson(log.getJSONObject(i)))
     }
 
     private fun buildDbJson(): String {
         val arr = JSONArray()
         documents.forEach { arr.put(it.toJson()) }
-        return JSONObject().put("schema", 1).put("documents", arr).toString()
+        val log = JSONArray()
+        shareLog.forEach { log.put(it.toJson()) }
+        return JSONObject().put("schema", 1).put("documents", arr).put("shareLog", log).toString()
+    }
+
+    fun addShareRecord(rec: ShareRecord) { shareLog.add(0, rec); save() }
+
+    fun updateShareRecipient(id: String, recipient: String) {
+        shareLog.firstOrNull { it.id == id }?.let { it.recipient = recipient; save() }
     }
 
     fun save() {

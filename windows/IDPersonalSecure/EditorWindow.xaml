@@ -30,8 +30,12 @@
                 <TextBox x:Name="IssueBox" Grid.Column="0"/>
                 <Button Grid.Column="1" Content="📅" Style="{StaticResource GhostButton}" Margin="6,0,0,0" Click="IssueCalendar_Click"/>
                 <Popup x:Name="IssuePopup" PlacementTarget="{Binding ElementName=IssueBox}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
-                    <Border Background="White" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
-                        <Calendar x:Name="IssueCal" SelectedDatesChanged="IssueCal_Changed"/>
+                    <Border Background="White" TextElement.Foreground="#111827" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
+                        <Border.Resources>
+                            <Style TargetType="Button"/>
+                            <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#111827"/></Style>
+                        </Border.Resources>
+                        <Calendar x:Name="IssueCal" Background="White" Foreground="#111827" SelectedDatesChanged="IssueCal_Changed"/>
                     </Border>
                 </Popup>
             </Grid>
@@ -48,8 +52,12 @@
                 <TextBox x:Name="ExpiryBox" Grid.Column="0"/>
                 <Button Grid.Column="1" Content="📅" Style="{StaticResource GhostButton}" Margin="6,0,0,0" Click="ExpiryCalendar_Click"/>
                 <Popup x:Name="ExpiryPopup" PlacementTarget="{Binding ElementName=ExpiryBox}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
-                    <Border Background="White" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
-                        <Calendar x:Name="ExpiryCal" SelectedDatesChanged="ExpiryCal_Changed"/>
+                    <Border Background="White" TextElement.Foreground="#111827" BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
+                        <Border.Resources>
+                            <Style TargetType="Button"/>
+                            <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#111827"/></Style>
+                        </Border.Resources>
+                        <Calendar x:Name="ExpiryCal" Background="White" Foreground="#111827" SelectedDatesChanged="ExpiryCal_Changed"/>
                     </Border>
                 </Popup>
             </Grid>

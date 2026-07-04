@@ -33,6 +33,7 @@
                                VerticalAlignment="Center"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                         <Button Content="＋ Agregar" Click="Add_Click"/>
+                        <Button Content="Historial" Style="{StaticResource GhostButton}" Click="History_Click"/>
                         <Button Content="Exportar" Style="{StaticResource GhostButton}" Click="Export_Click"/>
                         <Button Content="Importar" Style="{StaticResource GhostButton}" Click="Import_Click"/>
                         <Button Content="Bloquear" Style="{StaticResource GhostButton}" Click="Lock_Click"/>
