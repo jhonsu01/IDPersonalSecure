@@ -1,0 +1,44 @@
+<Window x:Class="IDPersonalSecure.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Acerca de" Width="420" SizeToContent="Height" MinHeight="320"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Icon="pack://application:,,,/Assets/app.ico"
+        Background="{StaticResource BgBrush}"
+        TextElement.Foreground="{StaticResource TextBrush}">
+    <StackPanel Margin="24" HorizontalAlignment="Center">
+        <Image Source="pack://application:,,,/Assets/app.ico" Width="72" Height="72"/>
+        <TextBlock Text="IDPersonalSecure" FontSize="22" FontWeight="Bold"
+                   HorizontalAlignment="Center" Margin="0,10,0,2"/>
+        <TextBlock x:Name="VersionText" Text="v0.0.0" Foreground="{StaticResource MutedBrush}"
+                   HorizontalAlignment="Center"/>
+        <TextBlock Text="Bóveda digital personal segura, multiplataforma."
+                   HorizontalAlignment="Center" TextAlignment="Center" Margin="0,10,0,0"
+                   TextWrapping="Wrap"/>
+        <TextBlock Text="Cifrado local AES-256-GCM · Offline-first"
+                   Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center"
+                   TextAlignment="Center" Margin="0,2,0,14"/>
+
+        <TextBlock HorizontalAlignment="Center" Margin="0,0,0,14">
+            <Hyperlink Click="Repo_Click" Foreground="{StaticResource AccentBrush}">
+                github.com/jhonsu01/IDPersonalSecure
+            </Hyperlink>
+        </TextBlock>
+
+        <Button Click="Kofi_Click" Cursor="Hand" HorizontalAlignment="Center" Padding="16,8"
+                Background="#FF5E5B" Foreground="White" BorderThickness="0">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                        <TextBlock Text="☕  Apóyame en Ko-fi" FontWeight="Bold"/>
+                    </Border>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <TextBlock Text="jhonsu777@gmail.com" Foreground="{StaticResource MutedBrush}"
+                   HorizontalAlignment="Center" Margin="0,14,0,0" FontSize="11"/>
+        <Button Content="Cerrar" Style="{StaticResource GhostButton}" Click="Close_Click"
+                HorizontalAlignment="Center" Margin="0,16,0,0"/>
+    </StackPanel>
+</Window>

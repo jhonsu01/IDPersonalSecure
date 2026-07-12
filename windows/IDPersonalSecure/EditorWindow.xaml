@@ -4,6 +4,7 @@
         xmlns:local="clr-namespace:IDPersonalSecure"
         Title="Documento" Height="700" Width="470"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Icon="pack://application:,,,/Assets/app.ico"
         Background="{StaticResource BgBrush}"
         TextElement.Foreground="{StaticResource TextBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">

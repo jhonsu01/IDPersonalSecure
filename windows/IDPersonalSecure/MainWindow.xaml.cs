@@ -127,6 +127,9 @@ public partial class MainWindow : Window
     private void History_Click(object sender, RoutedEventArgs e) =>
         new HistoryWindow(_repo) { Owner = this }.ShowDialog();
 
+    private void About_Click(object sender, RoutedEventArgs e) =>
+        new AboutWindow { Owner = this }.ShowDialog();
+
     private void Share_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not Document d) return;

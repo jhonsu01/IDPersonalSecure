@@ -57,6 +57,7 @@ public partial class App : Application
             _ = new EditorWindow(new Document { HasExpiry = true, ReminderAt = "2030-01-01 09:00", Type = "MI_TIPO_CUSTOM" });
             _ = new HistoryWindow(repo);
             _ = new ShareOptionsWindow();
+            _ = new AboutWindow();
             _ = new PromptWindow("prueba");
             _ = new InputPinWindow("prueba");
             File.WriteAllText(Path.Combine(dir, "ui-ok.txt"), "UI OK\n");

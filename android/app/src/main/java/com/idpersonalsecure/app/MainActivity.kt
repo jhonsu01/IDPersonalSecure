@@ -152,6 +152,7 @@ fun AppRoot(vm: VaultViewModel = viewModel()) {
 
 @Composable
 fun UnlockScreen(vm: VaultViewModel) {
+    val context = LocalContext.current
     var pin by remember { mutableStateOf("") }
     val newVault = remember { !vm.repo.vaultExists() }
     Column(
@@ -180,6 +181,13 @@ fun UnlockScreen(vm: VaultViewModel) {
         Button(onClick = { vm.unlock(pin) }, enabled = pin.length >= 4) {
             Text(if (newVault) "Crear bóveda" else "Desbloquear")
         }
+        Spacer(Modifier.height(36.dp))
+        Text(
+            "☕ Apóyame en Ko-fi",
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.clickable { openUrl(context, "https://ko-fi.com/V7V81LV7GX") }
+        )
     }
 }
 

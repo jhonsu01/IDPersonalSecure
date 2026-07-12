@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Compartir documento" Width="440" SizeToContent="Height" MinHeight="260"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Icon="pack://application:,,,/Assets/app.ico"
         Background="{StaticResource BgBrush}"
         TextElement.Foreground="{StaticResource TextBrush}">
     <StackPanel Margin="20">

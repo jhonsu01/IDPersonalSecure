@@ -4,6 +4,7 @@
         Title="IDPersonalSecure" Height="640" Width="820"
         MinHeight="480" MinWidth="640"
         WindowStartupLocation="CenterScreen"
+        Icon="pack://application:,,,/Assets/app.ico"
         Background="{StaticResource BgBrush}"
         TextElement.Foreground="{StaticResource TextBrush}">
 
@@ -36,6 +37,7 @@
                         <Button Content="Historial" Style="{StaticResource GhostButton}" Click="History_Click"/>
                         <Button Content="Exportar" Style="{StaticResource GhostButton}" Click="Export_Click"/>
                         <Button Content="Importar" Style="{StaticResource GhostButton}" Click="Import_Click"/>
+                        <Button Content="Acerca de" Style="{StaticResource GhostButton}" Click="About_Click"/>
                         <Button Content="Bloquear" Style="{StaticResource GhostButton}" Click="Lock_Click"/>
                     </StackPanel>
                 </DockPanel>

@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Historial de compartidos" Height="520" Width="620"
         WindowStartupLocation="CenterOwner"
+        Icon="pack://application:,,,/Assets/app.ico"
         Background="{StaticResource BgBrush}"
         TextElement.Foreground="{StaticResource TextBrush}">
     <DockPanel Margin="16">

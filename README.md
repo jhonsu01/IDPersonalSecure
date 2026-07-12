@@ -75,3 +75,13 @@ un tag `vX.Y.Z`. Para compilar localmente:
 ## 📄 Licencia
 
 MIT © 2026 [jhonsu01](https://github.com/jhonsu01). Ver [`LICENSE`](LICENSE).
+
+---
+
+## ☕ Apoyo / Donaciones
+
+Si esta app te resulta útil, puedes apoyar el proyecto con una donación:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/V7V81LV7GX)
+
+**Repositorio:** https://github.com/jhonsu01/IDPersonalSecure
